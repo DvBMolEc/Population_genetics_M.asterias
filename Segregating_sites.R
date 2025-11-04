@@ -2,6 +2,7 @@
 # R version: 4.2.3
 # Author: Daniël van Berkel
   # Adopted from: ?
+# Date: 2025-11-04
 
 ##alignment of sequences
 # Untrimmed Sequences ----------------------------------------------------
