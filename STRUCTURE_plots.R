@@ -49,76 +49,61 @@ Supplementary <- read.csv("Supplementary_data.csv")
 Supplementary <- Supplementary[c(1,4)]
 
 #Re-order to custom order
+colnames(Amplicon_6kb) <- c("Unique_Sample_ID", "Cluster_6kb_A", "Cluster_6kb_B", "Cluster_6kb_C")
+Amplicon_6kb <- left_join(Amplicon_6kb, Supplementary)
 Sorting_order <- c("BoB", "BC", "EC", "IS", "NNS", "SS", "SNS", "WoS")
-Supplementary <- Supplementary %>%
-  arrange(match(Capture.Region.Code, Sorting_order))
+Amplicon_6kb <- Amplicon_6kb %>%
+  arrange(Cluster_6kb_C, Cluster_6kb_B, Cluster_6kb_A) %>%
+  arrange(match(Capture.Region.Code, Sorting_order)) 
 
+Amplicon_6kb$Unique_Sample_ID <- factor(Amplicon_6kb$Unique_Sample_ID, levels = Amplicon_6kb$Unique_Sample_ID)
 #read data
-data<-Amplicon_6kb
-plt.order<-Supplementary$Unique_Sample_ID
-nclust<-dim(data)[2]-1
-#relabel the columns
-labs<-c("Specimen",paste("Cluster",seq(1:nclust),sep=""))
-og.labs<-paste("X",seq(1:(nclust+1)),sep="")
-setnames(data, og.labs, labs)
-#reorder, this does not do anything if you dont supply an order file
-data <- data[match(Supplementary$Unique_Sample_ID, data$Specimen),]
+plt.order <- Amplicon_6kb$Unique_Sample_ID
 #I melt here to make the plotting easy
-mdata<-melt(data)
-names(mdata) <- c("Specimen","Cluster","Probability")
-mdata$Specimen <-factor(mdata$Specimen,levels=data$Specimen)
+mdata <- reshape2::melt(Amplicon_6kb)
+names(mdata) <- c("Specimen", "Capture.Region.Code", "Cluster", "Probability")
 #plot, you can change the palette to something else to explore other color themes
-ggplot(mdata,aes(x = Specimen, y = Probability, fill = Cluster)) +
+ggplot(mdata, aes(x = Specimen, y = Probability, fill = Cluster)) +
   geom_bar(stat="identity", position="fill") +
-  geom_col(width = 0.99) +
-  scale_color_viridis_d(option = "D", aesthetics = "fill", alpha = 0.8) +
+  geom_col(width = 1) +
+  theme_classic(base_size = 50) +
   theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = -0.00001, colour="black")) +
   theme(axis.title.y = element_blank(), 
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.line.y = element_blank(),
-        legend.position="bottom") +
+        legend.position = "bottom") +
   xlab("Region") +
   scale_y_discrete(expand = c(0, 0)) +
-  scale_x_discrete(labels = Supplementary$Capture.Region.Code)
+  scale_x_discrete(labels = Amplicon_6kb$Capture.Region.Code) +
+  scale_fill_manual(labels = c("Cluster A", "Cluster B", "Cluster C"), values = viridis::viridis(3))
 #ggsave(paste("k",nclust,"STRplot.pdf",sep=""),width = 20, height = 9)
 options(warn = oldw)
 
 
 
  #####   CONTROL REGION ####
-setwd("C://Users/berke032/OneDrive - Wageningen University & Research/Documents/Stage Sportvisserij Nederland/STRUCTURE/Mustelus_asterias_20240627_ControlRegion/Manuscript_1mil/Results/")
 read.STR("Mustelus_ControlRegion.txt", "Manuscript_1mil_run_2_f")
-ControlRegion <- read.csv("../../../Mustelus_asterias_20240627_ControlRegion/Manuscript_1mil/Results/k3.csv")
+ControlRegion <- read.csv("k3.csv")
 ControlRegion$X2 <- round(ControlRegion$X2)
 ControlRegion$X3 <- round(ControlRegion$X3)
 ControlRegion$X4 <- round(ControlRegion$X4)
+# The clusters names are arbitrary. In this case, label them according to the 6kbp fragment, so the colours of the plot are similar.
+colnames(ControlRegion) <- c("Unique_Sample_ID", "Cluster_CR_C", "Cluster_CR_B", "Cluster_CR_A")
+ControlRegion <- ControlRegion %>% select(Unique_Sample_ID, Cluster_CR_A, Cluster_CR_B, Cluster_CR_C)
+ControlRegion <- left_join(ControlRegion, Supplementary)
+ControlRegion <- ControlRegion %>%  arrange(Cluster_CR_C, Cluster_CR_B, Cluster_CR_A) %>%
+  arrange(match(Capture.Region.Code, Sorting_order)) 
 
-
-Sorting_order_CR <- inner_join(Supplementary, ControlRegion, by = c("Unique_Sample_ID" = "X1")) %>%
-  arrange(desc(X2), desc(X3), desc(X4)) %>%
-  arrange(match(Capture.Region.Code, Sorting_order))
-
-data<-ControlRegion
-plt.order<-Sorting_order_CR$Unique_Sample_ID
-nclust<-dim(data)[2]-1
-#relabel the columns
-labs<-c("Specimen",paste("ControlRegionCluster",seq(1:nclust),sep=""))
-og.labs<-paste("X",seq(1:(nclust+1)),sep="")
-setnames(data, og.labs, labs)
-#reorder, this doesnt do anything if you dont supply an order file
-data <- data[match(Sorting_order_CR$Unique_Sample_ID, data$Specimen),]
+ControlRegion$Unique_Sample_ID <- factor(ControlRegion$Unique_Sample_ID, levels = ControlRegion$Unique_Sample_ID)
 #I melt here to make the plotting easy
-mdata<-melt(data)
-names(mdata) <- c("Specimen","Cluster","Probability")
-mdata$Specimen <-factor(mdata$Specimen,levels=data$Specimen)
+mdata.CR <- reshape2::melt(ControlRegion)
+names(mdata.CR) <- c("Specimen", "Region", "Cluster", "Probability")
 #plot, you can change the palette to something else to explore other color themes
-threecolours <- pals::cols25(3)
-ggplot(mdata,aes(x = Specimen, y = Probability, fill = Cluster)) +
+ggplot(mdata.CR,aes(x = Specimen, y = Probability, fill = Cluster)) +
   geom_bar(stat="identity", position="stack") +
-  geom_col(width = 0.99) +
-  scale_color_viridis_d(option = "D", aesthetics = "fill", alpha = 0.8) +
-  #theme_classic() +
+  geom_col(width = 1) +
+  theme_classic(base_size = 50) +
   theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = 0.00001, colour="black")) +
   theme(axis.title.y = element_blank(), 
         axis.text.y = element_blank(),
@@ -126,27 +111,26 @@ ggplot(mdata,aes(x = Specimen, y = Probability, fill = Cluster)) +
         axis.line.y = element_blank(),
         legend.position="bottom") +
   scale_y_discrete(expand = c(0, 0)) +
-  scale_x_discrete(labels = Sorting_order_CR$Capture.Region.Code)
+  scale_x_discrete(labels = ControlRegion$Unique_Sample_ID) +
+  scale_fill_manual(labels = c("Cluster A", "Cluster B", "Cluster C"), values = viridis::viridis(3))
   
-#ggsave(paste("k",nclust,"STRplot.pdf",sep=""),width = 20, height = 9)
-options(warn = oldw)
-
  ##### COMPARE CLUSTERS BETWEEEN 16S-COI & ControlRegion ####
-
+# As mentioned, the cluster names are arbitrary. Rename the Control Region cluster so they overlap with the 6kbp amplicon.
 ClusterComparison <- inner_join(Amplicon_6kb, ControlRegion)
-AA <- sum(subset(ClusterComparison, Cluster1 == 1)$ControlRegionCluster1)
-AB <- sum(subset(ClusterComparison, Cluster1 == 1)$ControlRegionCluster2)
-AC <- sum(subset(ClusterComparison, Cluster1 == 1)$ControlRegionCluster3)
-BA <- sum(subset(ClusterComparison, Cluster2 == 1)$ControlRegionCluster1)
-BB <- sum(subset(ClusterComparison, Cluster2 == 1)$ControlRegionCluster2)
-BC <- sum(subset(ClusterComparison, Cluster2 == 1)$ControlRegionCluster3)
-CA <- sum(subset(ClusterComparison, Cluster3 == 1)$ControlRegionCluster1)
-CB <- sum(subset(ClusterComparison, Cluster3 == 1)$ControlRegionCluster2)
-CC <- sum(subset(ClusterComparison, Cluster3 == 1)$ControlRegionCluster3)
+colnames(ClusterComparison) <- c("Specimen", "Cluster_6kb_A", "Cluster_6kb_B", "Cluster_6kb_C", "Capture.Region.Code", "Cluster_CR_A", "Cluster_CR_B", "Cluster_CR_C")
+
+AA <- sum(subset(ClusterComparison, Cluster_6kb_A == 1)$Cluster_CR_A)
+AB <- sum(subset(ClusterComparison, Cluster_6kb_A == 1)$Cluster_CR_B)
+AC <- sum(subset(ClusterComparison, Cluster_6kb_A == 1)$Cluster_CR_C)
+BA <- sum(subset(ClusterComparison, Cluster_6kb_B == 1)$Cluster_CR_A)
+BB <- sum(subset(ClusterComparison, Cluster_6kb_B == 1)$Cluster_CR_B)
+BC <- sum(subset(ClusterComparison, Cluster_6kb_B == 1)$Cluster_CR_C)
+CA <- sum(subset(ClusterComparison, Cluster_6kb_C == 1)$Cluster_CR_A)
+CB <- sum(subset(ClusterComparison, Cluster_6kb_C == 1)$Cluster_CR_B)
+CC <- sum(subset(ClusterComparison, Cluster_6kb_C == 1)$Cluster_CR_C)
 
 data.matrix <- matrix(data = c(AA, AB, AC, BA, BB, BC, CA, CB, CC), nrow = 3, ncol = 3, 
-                      dimnames = list(c("ControlRegion_Cluster_A", "ControlRegion_Cluster_B", "ControlRegion_Cluster_C"),
-                                      c("6kb_Cluster_A", "6kb_Cluster_B", "6kb_Cluster_C")))
-mcnemar.test(data.matrix)
-library("rcompanion")
-install.packages("rcompanion")
+                      dimnames = list(c("Cluster_CR_A", "Cluster_CR_B", "Cluster_CR_C"),
+                                      c("Cluster_6kb_A", "Cluster_6kb_B", "Cluster_6kb_C")))
+data.matrix
+fisher.test(data.matrix, hybrid = T)
