@@ -2,9 +2,13 @@
 # It is heavily based on code written by DrewWham: https://github.com/DrewWham/Genetic-Structure-Tools
 # Specifically, the plotSTR.R file can be found here: https://github.com/DrewWham/Genetic-Structure-Tools/blob/6474d60ca34935a7683472a1d943160568a67653/plotSTR.r
 
-# Rversion: 4.3.2
+# Rversion: 4.5.1
 
+library("stringr")
 library("dplyr")
+library("ggplot2")
+library("reshape2")
+library("viridis")
 source("plotSTR.r")
 
 read.STR<-function(STR.in,STR.out){
@@ -134,3 +138,120 @@ data.matrix <- matrix(data = c(AA, AB, AC, BA, BB, BC, CA, CB, CC), nrow = 3, nc
                                       c("Cluster_6kb_A", "Cluster_6kb_B", "Cluster_6kb_C")))
 data.matrix
 fisher.test(data.matrix, hybrid = T)
+
+## BAPS
+library("fastbaps")
+library("ape")
+library("stringr")
+library("tidyr")
+BAPS.data.6kbp <- import_fasta_sparse_nt("Sequences_6kbp.fasta")
+BAPS.data.6kbp <- optimise_prior(BAPS.data.6kbp, type = "optimise.symmetric")
+baps.hc.6kbp <- fast_baps(BAPS.data.6kbp)
+clusters.6kbp <- best_baps_partition(BAPS.data.6kbp, as.phylo(baps.hc.6kbp))
+BAPS.Amplicon.6kbp <- as.data.frame(clusters.6kbp)
+BAPS.Amplicon.6kbp$Unique_Sample_ID <- row.names(BAPS.Amplicon.6kbp)
+BAPS.Amplicon.6kbp$Unique_Sample_ID <- str_extract(BAPS.Amplicon.6kbp$Unique_Sample_ID, "[A-z]+[0-9]+")
+# Add metadata
+BAPS.Amplicon.6kbp <- left_join(BAPS.Amplicon.6kbp, Supplementary)
+# Rearrange and sort
+Sorting_order <- c("BoB", "BC", "EC", "IS", "NNS", "SS", "SNS", "WoS")
+BAPS.Amplicon.6kbp <- BAPS.Amplicon.6kbp %>%
+  arrange(clusters.6kbp) %>%
+  arrange(match(Capture.Region.Code, Sorting_order))
+BAPS.Amplicon.6kbp$Unique_Sample_ID <- factor(BAPS.Amplicon.6kbp$Unique_Sample_ID, levels = BAPS.Amplicon.6kbp$Unique_Sample_ID)
+# Tranform dataframe to plot tidyer
+BAPS.Amplicon.6kbp$Probability <- 1
+BAPS.Amplicon.6kbp$clusters.6kbp <- paste0("Cluster_", BAPS.Amplicon.6kbp$clusters.6kbp)
+BAPS.Amplicon.6kbp <- rename(BAPS.Amplicon.6kbp, Cluster = clusters.6kbp)
+# Plot
+ggplot(BAPS.Amplicon.6kbp, aes(x = Unique_Sample_ID, y = Probability, fill = Cluster)) +
+  geom_bar(stat="identity", position="fill") +
+  geom_col(width = 1) +
+  theme_classic(base_size = 50) +
+  theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = -0.00001, colour="black")) +
+  theme(axis.title.y = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "bottom") +
+  xlab("Region") +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_discrete(labels = BAPS.Amplicon.6kbp$Capture.Region.Code) +
+  scale_fill_manual(labels = c("Cluster 1", "Cluster 2", "Cluster 3", "Cluster 4", "Cluster 5"), values = viridis(5))
+
+# Based on later clustering, rearrange the order of BAPS clusters
+# Cluster names are arbitrary, so switch
+BAPS.Amplicon.6kbp$ClusterNew <- ifelse(BAPS.Amplicon.6kbp$Cluster == "Cluster_4", "Cluster_1",
+                                        ifelse(BAPS.Amplicon.6kbp$Cluster == "Cluster_1", "Cluster_2",
+                                               ifelse(BAPS.Amplicon.6kbp$Cluster == "Cluster_2", "Cluster_3",
+                                                      ifelse(BAPS.Amplicon.6kbp$Cluster == "Cluster_5", "Cluster_4",
+                                                             ifelse(BAPS.Amplicon.6kbp$Cluster == "Cluster_3", "Cluster_5", NA)))))
+Cluster_order <- c("Cluster_1", "Cluster_2", "Cluster_3", "Cluster_4", "Cluster_5")
+BAPS.Amplicon.6kbp <- BAPS.Amplicon.6kbp %>% select(-Cluster) %>%
+  arrange(match(ClusterNew, Cluster_order)) %>%
+  arrange(match(Capture.Region.Code, Sorting_order)) %>% rename(Cluster = ClusterNew)
+BAPS.Amplicon.6kbp$Unique_Sample_ID <- factor(BAPS.Amplicon.6kbp$Unique_Sample_ID, levels = BAPS.Amplicon.6kbp$Unique_Sample_ID)
+ggplot(BAPS.Amplicon.6kbp, aes(x = Unique_Sample_ID, y = Probability, fill = Cluster)) +
+  geom_bar(stat="identity", position="fill") +
+  geom_col(width = 1) +
+  theme_classic(base_size = 50) +
+  theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = -0.00001, colour="black")) +
+  theme(axis.title.y = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "bottom") +
+  xlab("Region") +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_discrete(labels = BAPS.Amplicon.6kbp$Capture.Region.Code) +
+  scale_fill_manual(labels = c("Cluster A", "Cluster B", "Cluster C", "Cluster D", "Cluster E"), values = viridis(5))
+
+# Overlap between SCTRUCTURE and BAPS
+ClusterComparison <- left_join(BAPS.Amplicon.6kbp, filter(mdata, Probability == 1), by = c("Unique_Sample_ID", "Capture.Region.Code"))
+colnames(ClusterComparison) <- c("Unique_Sample_ID", "Capture.Region.Code", "Probability.BAPS", "Cluster_BAPS", "Cluster_STRUCTURE", "Probability.STRUCTURE")
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_6kb_A"])
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_6kb_B"])
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_6kb_C"])
+
+# Repeat for Control_Region
+BAPS.data.CR <- import_fasta_sparse_nt("Sequences_NCR.fasta")
+BAPS.data.CR <- optimise_prior(BAPS.data.CR, type = "optimise.symmetric")
+baps.hc.CR <- fast_baps(BAPS.data.CR)
+clusters.CR <- best_baps_partition(BAPS.data.CR, as.phylo(baps.hc.CR))
+BAPS.Amplicon.CR <- as.data.frame(clusters.CR)
+BAPS.Amplicon.CR$Unique_Sample_ID <- row.names(BAPS.Amplicon.CR)
+BAPS.Amplicon.CR$Unique_Sample_ID <- str_extract(BAPS.Amplicon.CR$Unique_Sample_ID, "[A-z]+[0-9]+")
+# Add metadata
+BAPS.Amplicon.CR <- left_join(BAPS.Amplicon.CR, Supplementary)
+# Rearrange and sort
+Sorting_order <- c("BoB", "BC", "EC", "IS", "NNS", "SS", "SNS", "WoS")
+BAPS.Amplicon.CR <- BAPS.Amplicon.CR %>%
+  arrange(clusters.CR) %>%
+  arrange(match(Capture.Region.Code, Sorting_order))
+BAPS.Amplicon.CR$Unique_Sample_ID <- factor(BAPS.Amplicon.CR$Unique_Sample_ID, levels = BAPS.Amplicon.CR$Unique_Sample_ID)
+# Tranform dataframe to plot tidyer
+BAPS.Amplicon.CR$Probability <- 1
+BAPS.Amplicon.CR$clusters.CR <- paste0("Cluster_", BAPS.Amplicon.CR$clusters.CR)
+BAPS.Amplicon.CR <- rename(BAPS.Amplicon.CR, Cluster = clusters.CR)
+# Plot
+ggplot(BAPS.Amplicon.CR, aes(x = Unique_Sample_ID, y = Probability, fill = Cluster)) +
+  geom_bar(stat="identity", position="fill") +
+  geom_col(width = 1) +
+  theme_classic(base_size = 50) +
+  theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = -0.00001, colour="black")) +
+  theme(axis.title.y = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "bottom") +
+  xlab("Region") +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_x_discrete(labels = BAPS.Amplicon.CR$Capture.Region.Code) +
+  scale_fill_manual(labels = c("Cluster 1", "Cluster 2", "Cluster 3"), values = viridis(3))
+
+# Overlap between STRUCTURE and BAPS
+ClusterComparison <- left_join(BAPS.Amplicon.CR, filter(mdata.CR, Probability == 1), by = c("Unique_Sample_ID")) %>% select(-Region)
+colnames(ClusterComparison) <- c("Cluster_BAPS", "Unique_Sample_ID", "Capture.Region.Code", "Probability.BAPS",  "Cluster_STRUCTURE", "Probability.STRUCTURE")
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_CR_A"])
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_CR_B"])
+table(ClusterComparison$Cluster_BAPS[ClusterComparison$Cluster_STRUCTURE=="Cluster_CR_C"])
